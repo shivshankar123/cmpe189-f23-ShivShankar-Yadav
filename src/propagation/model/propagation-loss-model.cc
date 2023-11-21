@@ -562,6 +562,108 @@ LogDistancePropagationLossModel::DoAssignStreams(int64_t stream)
 
 // ------------------------------------------------------------------------- //
 
+// ------------------------------------------------------------------------- //
+
+NS_OBJECT_ENSURE_REGISTERED(LogNormalShadowingPropagationLossModel);
+
+TypeId
+LogNormalShadowingPropagationLossModel::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::LogNormalShadowingPropagationLossModel")
+            .SetParent<PropagationLossModel>()
+            .SetGroupName("Propagation")
+            .AddConstructor<LogNormalShadowingPropagationLossModel>()
+            .AddAttribute("Exponent",
+                          "The exponent of the Path Loss propagation model",
+                          DoubleValue(3.0),
+                          MakeDoubleAccessor(&LogNormalShadowingPropagationLossModel::m_exponent),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("ReferenceDistance",
+                          "The distance at which the reference loss is calculated (m)",
+                          DoubleValue(1.0),
+                          MakeDoubleAccessor(&LogNormalShadowingPropagationLossModel::m_referenceDistance),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("ReferenceLoss",
+                          "The reference loss at reference distance (dB). (Default is Friis at 1m "
+                          "with 5.15 GHz)",
+                          DoubleValue(46.6777),
+                          MakeDoubleAccessor(&LogNormalShadowingPropagationLossModel::m_referenceLoss),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("Variable",
+                          "The random variable used to pick a loss every time CalcRxPower is invoked.",
+                          StringValue("ns3::NormalRandomVariable[Mean=0|Variance=2]"),
+                          MakePointerAccessor(&LogNormalShadowingPropagationLossModel::m_variable),
+                          MakePointerChecker<RandomVariableStream>());
+    return tid;
+}
+
+LogNormalShadowingPropagationLossModel::LogNormalShadowingPropagationLossModel()
+{
+}
+
+void
+LogNormalShadowingPropagationLossModel::SetPathLossExponent(double n)
+{
+    m_exponent = n;
+}
+
+void
+LogNormalShadowingPropagationLossModel::SetReference(double referenceDistance, double referenceLoss)
+{
+    m_referenceDistance = referenceDistance;
+    m_referenceLoss = referenceLoss;
+}
+
+double
+LogNormalShadowingPropagationLossModel::GetPathLossExponent() const
+{
+    return m_exponent;
+}
+
+
+double
+LogNormalShadowingPropagationLossModel::DoCalcRxPower(double txPowerDbm,
+                                               Ptr<MobilityModel> a,
+                                               Ptr<MobilityModel> b) const
+{
+    double distance = a->GetDistanceFrom(b);
+    if (distance <= m_referenceDistance)
+    {
+        return txPowerDbm - m_referenceLoss;
+    }
+    /**
+     * The formula is:
+     * rx = 10 * log (Pr0(tx)) - n * 10 * log (d/d0)
+     *
+     * Pr0: rx power at reference distance d0 (W)
+     * d0: reference distance: 1.0 (m)
+     * d: distance (m)
+     * tx: tx power (dB)
+     * rx: dB
+     *
+     * Which, in our case is:
+     *
+     * rx = rx0(tx) - 10 * n * log (d/d0)
+     */
+    double pathLossDb = 10 * m_exponent * std::log10(distance / m_referenceDistance);
+    double rxc = -m_referenceLoss - pathLossDb;
+    NS_LOG_DEBUG("distance=" << distance << "m, reference-attenuation=" << -m_referenceLoss
+                             << "dB, "
+                             << "attenuation coefficient=" << rxc << "db");
+    double gauss = m_variable->GetValue();
+    NS_LOG_DEBUG("Gaussian coefficient=" << gauss << "Db");
+    return txPowerDbm + rxc + gauss;
+}
+
+int64_t
+LogNormalShadowingPropagationLossModel::DoAssignStreams(int64_t stream)
+{
+    return 0;
+}
+
+// ------------------------------------------------------------------------- //
+
 NS_OBJECT_ENSURE_REGISTERED(ThreeLogDistancePropagationLossModel);
 
 TypeId
